@@ -1,6 +1,5 @@
-'use client';
-
 import React, { useState } from 'react';
+import { getAssetUrl } from './assets';
 
 export const PIECE_CODES = [
   'wP', 'wN', 'wB', 'wR', 'wQ', 'wK',
@@ -29,7 +28,7 @@ export function preloadPieceImages() {
   if (typeof window === 'undefined') return;
   PIECE_CODES.forEach((code) => {
     const img = new Image();
-    img.src = `/pieces/${code}.png`;
+    img.src = getAssetUrl(`pieces/${code}.png`);
   });
 }
 
@@ -67,13 +66,12 @@ export const PieceImage: React.FC<PieceProps> = ({ piece, size = '100%', classNa
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={`/pieces/${code}.png`}
+      src={getAssetUrl(`pieces/${code}.png`)}
       alt={code}
       className={className}
       onError={() => {
-        console.warn(`[PieceRenderer] Missing or failed to load /pieces/${code}.png. Using text glyph '${glyph}'.`);
+        console.warn(`[PieceRenderer] Missing or failed to load pieces/${code}.png. Using text glyph '${glyph}'.`);
         setHasError(true);
       }}
       style={{

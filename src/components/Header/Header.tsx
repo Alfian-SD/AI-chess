@@ -1,15 +1,20 @@
-'use client';
-
 import React from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
-import { BarChart3, Trophy } from 'lucide-react';
+import { BarChart3, Trophy, Sliders, Sparkles } from 'lucide-react';
 
 interface HeaderProps {
+  mockEnabled?: boolean;
+  onOpenSettings: () => void;
   onOpenScoreboard: () => void;
   onOpenReplay: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenScoreboard, onOpenReplay }) => {
+export const Header: React.FC<HeaderProps> = ({
+  mockEnabled = false,
+  onOpenSettings,
+  onOpenScoreboard,
+  onOpenReplay,
+}) => {
   const { locale, setLocale, t } = useTranslation();
 
   return (
@@ -57,10 +62,59 @@ export const Header: React.FC<HeaderProps> = ({ onOpenScoreboard, onOpenReplay }
         >
           {t.appTitle}
         </span>
+
+        {mockEnabled && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '10px',
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
+              color: '#ea9a2a',
+              backgroundColor: 'rgba(234, 154, 42, 0.15)',
+              border: '1px solid rgba(234, 154, 42, 0.3)',
+              padding: '2px 6px',
+              borderRadius: '4px',
+            }}
+          >
+            <Sparkles size={11} />
+            MOCK
+          </span>
+        )}
       </div>
 
-      {/* Actions: Scoreboard, Saved Games, i18n switcher */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Actions: Settings, Scoreboard, Saved Games, i18n switcher */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        {/* Settings Button */}
+        <button
+          onClick={onOpenSettings}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 11px',
+            backgroundColor: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-control)',
+            color: 'var(--text)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'color 150ms ease, border-color 150ms ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--accent-strong)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--border)';
+          }}
+        >
+          <Sliders size={13} color="var(--accent-strong)" />
+          <span>Settings</span>
+        </button>
+
         {/* Scoreboard Button */}
         <button
           onClick={onOpenScoreboard}

@@ -1,25 +1,25 @@
-'use client';
-
-import React, { useState } from 'react';
+import React from 'react';
 import { MatchStatus, PlayerConfig, MatchSettings } from '../../lib/types';
 import { useTranslation } from '../../i18n/LanguageContext';
-import { Play, Pause, RotateCcw, StepForward, Settings2, RefreshCw, AlertCircle } from 'lucide-react';
-import { ModelSelectorModal } from './ModelSelectorModal';
+import { Play, Pause, RotateCcw, StepForward, Sliders, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 
 interface MatchControlProps {
   status: MatchStatus;
   settings: MatchSettings;
   whiteConfig: PlayerConfig;
   blackConfig: PlayerConfig;
+  openingName?: string;
+  drawReason?: string;
   errorMessage?: string;
-  onStart: () => void;
+  isConfigured: boolean;
+  onStart: () => boolean | void;
   onPause: () => void;
   onReset: () => void;
-  onStep: () => void;
+  onStep: () => boolean | void;
   onRetry: () => void;
   onSetMoveDelay: (delay: number) => void;
   onSetMaxPly: (maxPly: number) => void;
-  onSavePlayerConfigs: (white: PlayerConfig, black: PlayerConfig) => void;
+  onOpenSettings: () => void;
 }
 
 export const MatchControl: React.FC<MatchControlProps> = ({
@@ -27,7 +27,10 @@ export const MatchControl: React.FC<MatchControlProps> = ({
   settings,
   whiteConfig,
   blackConfig,
+  openingName,
+  drawReason,
   errorMessage,
+  isConfigured,
   onStart,
   onPause,
   onReset,
@@ -35,10 +38,9 @@ export const MatchControl: React.FC<MatchControlProps> = ({
   onRetry,
   onSetMoveDelay,
   onSetMaxPly,
-  onSavePlayerConfigs,
+  onOpenSettings,
 }) => {
   const { t } = useTranslation();
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Status Badge Styling
   let statusBadgeText = t.statusIdle;
@@ -66,6 +68,23 @@ export const MatchControl: React.FC<MatchControlProps> = ({
   const isRunning = status === 'running';
   const isPaused = status === 'paused';
   const isFinished = status === 'finished';
+  const isMock = settings.mockEnabled || whiteConfig.provider === 'mock';
+
+  const handleStartClick = () => {
+    if (!isConfigured && !isMock) {
+      onOpenSettings();
+      return;
+    }
+    onStart();
+  };
+
+  const handleStepClick = () => {
+    if (!isConfigured && !isMock) {
+      onOpenSettings();
+      return;
+    }
+    onStep();
+  };
 
   return (
     <div
@@ -95,21 +114,39 @@ export const MatchControl: React.FC<MatchControlProps> = ({
         >
           {t.matchControl}
         </span>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            padding: '2px 8px',
-            borderRadius: '4px',
-            border: `1px solid ${statusBadgeBorder}`,
-            color: statusBadgeColor,
-            fontWeight: 600,
-          }}
-        >
-          {statusBadgeText}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {isMock && (
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '9px',
+                fontWeight: 700,
+                color: '#ea9a2a',
+                backgroundColor: 'rgba(234, 154, 42, 0.15)',
+                border: '1px solid rgba(234, 154, 42, 0.3)',
+                padding: '2px 6px',
+                borderRadius: '4px',
+              }}
+            >
+              MOCK
+            </span>
+          )}
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '10px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              border: `1px solid ${statusBadgeBorder}`,
+              color: statusBadgeColor,
+              fontWeight: 600,
+            }}
+          >
+            {statusBadgeText}
+          </span>
+        </div>
       </div>
 
       {/* Headline & Subtitle */}
@@ -140,7 +177,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
 
       {/* Players Row (Interactive to configure) */}
       <div
-        onClick={() => setIsModalOpen(true)}
+        onClick={onOpenSettings}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -154,7 +191,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
         }}
         onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
         onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
-        title="Klik untuk mengubah model AI"
+        title="Klik untuk konfigurasi model & endpoint AI"
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ffffff', flexShrink: 0 }} />
@@ -169,7 +206,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
               maxWidth: '110px',
             }}
           >
-            {whiteConfig.displayName}
+            {whiteConfig.displayName || 'White'}
           </span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', padding: '0 4px' }}>
             VS
@@ -186,22 +223,43 @@ export const MatchControl: React.FC<MatchControlProps> = ({
               maxWidth: '110px',
             }}
           >
-            {blackConfig.displayName}
+            {blackConfig.displayName || 'Black'}
           </span>
         </div>
-        <Settings2 size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+        <Sliders size={15} color="var(--accent-strong)" style={{ flexShrink: 0 }} />
       </div>
 
-      {/* Selects: Jeda langkah & Batas langkah */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+      {/* Unconfigured Warning Banner if empty */}
+      {!isConfigured && !isMock && (
+        <div
+          onClick={onOpenSettings}
+          style={{
+            padding: '8px 12px',
+            backgroundColor: 'rgba(234, 154, 42, 0.1)',
+            border: '1px solid rgba(234, 154, 42, 0.3)',
+            borderRadius: '6px',
+            fontSize: '11px',
+            color: '#ea9a2a',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span>Endpoints not yet configured. Click to set up.</span>
+          <Sliders size={13} />
+        </div>
+      )}
+
+      {/* Selects Row: Move Delay & Move Limit */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         <div>
-          <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
             {t.moveDelay}
           </label>
           <select
             value={settings.moveDelayMs}
             onChange={(e) => onSetMoveDelay(parseInt(e.target.value, 10))}
-            disabled={isRunning}
             style={{
               width: '100%',
               padding: '8px 10px',
@@ -210,25 +268,24 @@ export const MatchControl: React.FC<MatchControlProps> = ({
               borderRadius: 'var(--radius-control)',
               color: 'var(--text)',
               fontSize: '12px',
-              cursor: isRunning ? 'not-allowed' : 'pointer',
-              opacity: isRunning ? 0.6 : 1,
+              cursor: 'pointer',
             }}
           >
-            <option value={0}>0 {t.seconds}</option>
-            <option value={1000}>1 {t.seconds}</option>
-            <option value={2000}>2 {t.seconds}</option>
-            <option value={5000}>5 {t.seconds}</option>
+            <option value={0}>0 ms (Instan)</option>
+            <option value={500}>0.5 detik</option>
+            <option value={1000}>1 detik (Default)</option>
+            <option value={2000}>2 detik</option>
+            <option value={5000}>5 detik</option>
           </select>
         </div>
 
         <div>
-          <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
             {t.moveLimit}
           </label>
           <select
             value={settings.maxPly}
             onChange={(e) => onSetMaxPly(parseInt(e.target.value, 10))}
-            disabled={isRunning}
             style={{
               width: '100%',
               padding: '8px 10px',
@@ -237,114 +294,136 @@ export const MatchControl: React.FC<MatchControlProps> = ({
               borderRadius: 'var(--radius-control)',
               color: 'var(--text)',
               fontSize: '12px',
-              cursor: isRunning ? 'not-allowed' : 'pointer',
-              opacity: isRunning ? 0.6 : 1,
+              cursor: 'pointer',
             }}
           >
-            <option value={50}>50 {t.ply}</option>
-            <option value={100}>100 {t.ply}</option>
-            <option value={200}>200 {t.ply}</option>
-            <option value={300}>300 {t.ply}</option>
+            <option value={50}>50 langkah</option>
+            <option value={100}>100 langkah</option>
+            <option value={200}>200 langkah (Default)</option>
+            <option value={300}>300 langkah</option>
           </select>
         </div>
       </div>
 
-      {/* Error Banner with Retry */}
+      {/* Error state message and retry */}
       {status === 'error' && (
         <div
           style={{
+            padding: '10px 12px',
             backgroundColor: 'rgba(192, 86, 75, 0.15)',
             border: '1px solid var(--danger)',
             borderRadius: 'var(--radius-control)',
-            padding: '10px 12px',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            flexDirection: 'column',
             gap: '8px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <AlertCircle size={16} color="var(--danger)" style={{ flexShrink: 0 }} />
-            <span
-              style={{
-                fontSize: '12px',
-                color: 'var(--danger)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {errorMessage || 'Error occurred'}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <AlertCircle size={16} color="var(--danger)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <span style={{ fontSize: '12px', color: '#f87171', lineHeight: 1.4 }}>
+              {errorMessage || 'Terjadi kesalahan pada provider AI'}
             </span>
           </div>
-          <button
-            onClick={onRetry}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: 'var(--danger)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '4px 8px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            <RefreshCw size={11} />
-            {t.retry}
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={onRetry}
+              style={{
+                alignSelf: 'flex-start',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 10px',
+                backgroundColor: 'var(--danger)',
+                border: 'none',
+                borderRadius: '4px',
+                color: '#ffffff',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <RefreshCw size={11} />
+              Coba Lagi (Retry)
+            </button>
+            <button
+              onClick={onOpenSettings}
+              style={{
+                alignSelf: 'flex-start',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 10px',
+                backgroundColor: 'var(--surface-2)',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                color: 'var(--text)',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              <Sliders size={11} />
+              Open Settings
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Primary Action Button (Full width 44px) */}
-      <button
-        onClick={isRunning ? onPause : onStart}
-        disabled={isFinished}
-        style={{
-          width: '100%',
-          height: '44px',
-          backgroundColor: isRunning ? '#333333' : 'var(--accent)',
-          border: 'none',
-          borderRadius: 'var(--radius-control)',
-          color: '#ffffff',
-          fontSize: '14px',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          cursor: isFinished ? 'not-allowed' : 'pointer',
-          opacity: isFinished ? 0.4 : 1,
-          transition: 'background-color 150ms ease',
-        }}
-        onMouseEnter={(e) => {
-          if (!isRunning && !isFinished) e.currentTarget.style.backgroundColor = 'var(--accent-strong)';
-        }}
-        onMouseLeave={(e) => {
-          if (!isRunning && !isFinished) e.currentTarget.style.backgroundColor = 'var(--accent)';
-        }}
-      >
-        {isRunning ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
-        <span>
-          {isRunning
-            ? t.pauseMatch
-            : isPaused
-            ? t.continueMatch
-            : t.startMatch}
-        </span>
-      </button>
+      {/* Primary Action Button */}
+      {isRunning ? (
+        <button
+          onClick={onPause}
+          style={{
+            width: '100%',
+            height: '44px',
+            backgroundColor: '#c99a3e',
+            border: 'none',
+            borderRadius: 'var(--radius-control)',
+            color: '#ffffff',
+            fontSize: '14px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+          }}
+        >
+          <Pause size={16} />
+          {t.pause}
+        </button>
+      ) : (
+        <button
+          onClick={handleStartClick}
+          disabled={isFinished}
+          style={{
+            width: '100%',
+            height: '44px',
+            backgroundColor: isFinished ? 'var(--surface-2)' : 'var(--accent)',
+            border: 'none',
+            borderRadius: 'var(--radius-control)',
+            color: '#ffffff',
+            fontSize: '14px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: isFinished ? 'not-allowed' : 'pointer',
+            opacity: isFinished ? 0.5 : 1,
+          }}
+        >
+          <Play size={16} fill="currentColor" />
+          {isPaused ? t.continueMatch : t.startMatch}
+        </button>
+      )}
 
-      {/* Secondary Row: Pause, Reset, +1 Langkah */}
+      {/* Secondary Row: Pause, Reset, +1 Move */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
         <button
           onClick={onPause}
           disabled={!isRunning}
           style={{
-            height: '36px',
+            padding: '8px 0',
             backgroundColor: 'var(--surface-2)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-control)',
@@ -355,8 +434,8 @@ export const MatchControl: React.FC<MatchControlProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             gap: '4px',
-            cursor: !isRunning ? 'not-allowed' : 'pointer',
-            opacity: !isRunning ? 0.4 : 1,
+            cursor: isRunning ? 'pointer' : 'not-allowed',
+            opacity: isRunning ? 1 : 0.4,
           }}
         >
           <Pause size={13} />
@@ -366,7 +445,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
         <button
           onClick={onReset}
           style={{
-            height: '36px',
+            padding: '8px 0',
             backgroundColor: 'var(--surface-2)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-control)',
@@ -385,10 +464,10 @@ export const MatchControl: React.FC<MatchControlProps> = ({
         </button>
 
         <button
-          onClick={onStep}
+          onClick={handleStepClick}
           disabled={isRunning || isFinished}
           style={{
-            height: '36px',
+            padding: '8px 0',
             backgroundColor: 'var(--surface-2)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-control)',
@@ -408,6 +487,46 @@ export const MatchControl: React.FC<MatchControlProps> = ({
         </button>
       </div>
 
+      {/* Active Opening Repertoire Badge */}
+      {openingName && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'rgba(125, 138, 94, 0.15)',
+            border: '1px solid var(--accent)',
+            borderRadius: 'var(--radius-control)',
+            padding: '6px 10px',
+            fontSize: '11px',
+            color: 'var(--accent-strong)',
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>📖 Opening:</span>
+          <span>{openingName}</span>
+        </div>
+      )}
+
+      {/* Draw Termination Reason */}
+      {status === 'finished' && drawReason && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-control)',
+            padding: '6px 10px',
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+          }}
+        >
+          <span style={{ fontWeight: 600, color: 'var(--text)' }}>Draw Reason:</span>
+          <span>{drawReason}</span>
+        </div>
+      )}
+
       {/* Footer Notice */}
       <div
         style={{
@@ -419,17 +538,8 @@ export const MatchControl: React.FC<MatchControlProps> = ({
           marginTop: '4px',
         }}
       >
-        {t.liveApiNotice}
+        {isMock ? 'MOCK MODE - Simulated offline thinking' : t.liveApiNotice}
       </div>
-
-      {/* Modal for model settings */}
-      <ModelSelectorModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        whiteConfig={whiteConfig}
-        blackConfig={blackConfig}
-        onSave={onSavePlayerConfigs}
-      />
     </div>
   );
 };

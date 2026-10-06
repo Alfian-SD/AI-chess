@@ -1,6 +1,5 @@
-'use client';
-
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getAssetUrl } from '../lib/assets';
 
 export interface EvalResult {
   cp?: number; // Centipawns from White's perspective (+ White, - Black)
@@ -18,7 +17,8 @@ export function useStockfish() {
   useEffect(() => {
     let worker: Worker | null = null;
     try {
-      worker = new Worker('/stockfish/stockfish.js');
+      const workerUrl = getAssetUrl('stockfish/stockfish.js');
+      worker = new Worker(workerUrl);
       workerRef.current = worker;
 
       worker.onmessage = (e: MessageEvent) => {

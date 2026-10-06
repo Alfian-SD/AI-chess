@@ -1,188 +1,155 @@
-# AI Chess Arena ("Let them play.")
+# ♚ AI Chess Arena
 
-> **"Dua pemain, satu pertandingan. Kamu yang atur."**  
-> An interactive spectator arena where two AI models play full chess matches against each other and viewers watch their live, unadulterated step-by-step reasoning.
+[![Deploy to GitHub Pages](https://github.com/<user>/<repo>/actions/workflows/deploy.yml/badge.svg)](https://github.com/<user>/<repo>/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
+> **"Let them play."** (*Dua pemain, satu pertandingan. Kamu yang atur.*)
 
-## Features
+AI Chess Arena is a **100% client-side, zero-backend web application** where two AI language models play complete chess matches against each other while you spectate. The arena makes AI cognition transparent: for every single move, you watch the model's live token-by-token reasoning unfold before it commits to a legal move.
 
-- **Real-Time Reasoning Stream**: Stream the active model's raw internal chess thinking token by token via Server-Sent Events (SSE). No canned or fabricated commentary.
-- **Classic Piece Set**: Custom crisp piece set loaded from `/public/pieces/` with fallback to text glyphs on image failure.
-- **Robust Move Validation & Retry**: Moves are parsed for `MOVE: <san>` and validated against `chess.js` legal moves. Invalid moves are retried up to 3 times with feedback and highlighted in red; after 3 failures, an automatic random legal move is played and tagged `FORFEIT MOVE`.
-- **Live Stockfish Evaluation (WASM)**: Centipawn eval bar alongside the board, with move quality classifications (Best, Good, Inaccuracy, Mistake, Blunder) in history.
-- **Interactive Move History**: Click any past ply to view the historical board position and reasoning without breaking the live match.
-- **Saved Games & Replay**: Save matches locally, replay past games with a timeline slider, export as JSON or PGN with reasoning embedded as comments.
-- **Scoreboard**: Track Win/Loss/Draw statistics, average latency, and illegal-move rates across model pairings.
-- **Strict Dark Theme & Tokens**: High-contrast, muted olive palette matching design specifications.
-- **Localization (i18n)**: Indonesian (default) and English with instant toggle.
-- **Responsive Design**: Two-column layout for desktop (1280px), single column under 900px, tight responsive layout for mobile (390px).
+Hosted statically on **GitHub Pages** with zero runtime servers, zero environment variables, and zero bundled API keys.
 
 ---
 
-## Tech Stack
+## 🌐 Live Demo & Preview
 
-- **Framework**: Next.js 16 (App Router) + React 19 + TypeScript (strict mode)
-- **Styling**: Vanilla CSS with design token variables (`globals.css`)
-- **Chess Engine**: `chess.js` (validation, legal moves, PGN generation) + `react-chessboard`
-- **Evaluation Engine**: Stockfish (WASM Web Worker)
-- **Streaming**: Server-Sent Events (SSE) via Next.js Route Handlers (`/api/move`)
+- **Live Site:** [https://<user>.github.io/<repo>/](https://<user>.github.io/<repo>/) *(Replace with your GitHub username and repository name)*
+- **Demo Screenshot:**
+
+```
++-------------------------------------------------------------+
+|  BLACK: Claude 3.5 Sonnet              MATCH CONTROL        |
+|  [ 8x8 CHESSBOARD & EVAL BAR ]         [ Continue ] [Step]  |
+|  WHITE: GPT-4o                         MOVE COMMENTARY      |
+|  [ Flip Board ] [ Copy FEN ]           Thinking token stream|
++-------------------------------------------------------------+
+```
 
 ---
 
-## Getting Started
+## ✨ Features
 
-### 1. Prerequisites
-- Node.js >= 18 (Node 20+ recommended)
-- npm >= 9
+- **Visible Live Reasoning:** Token-by-token streaming of the active model's raw tactical and positional thoughts (`reasoning_content` or standard chain-of-thought).
+- **Any OpenAI-Compatible Endpoint:** Connect OpenAI, OpenRouter, Together AI, or local offline LLMs running via **Ollama** or **LM Studio**.
+- **Different Models per Side:** Pit GPT-4o against Claude 3.5 Sonnet, DeepSeek R1 against Llama 3.3, or benchmark two different temperatures of the same model.
+- **Stockfish WASM Evaluation:** Runs real-time evaluation (centipawns & mate depth) via an in-browser Web Worker using single-threaded Stockfish WASM.
+- **Match Controls:** Play, pause, step forward (+1 move), adjust move delays (0ms to 5s), and set max plies.
+- **Opening Repertoire:** Includes theoretical opening lines (Ruy Lopez, Sicilian, Italian, Queen's Gambit, French, etc.) to set up exciting board positions.
+- **Replay & PGN / JSON Export:** Replay finished matches with a timeline scrubber, download PGN with embedded reasoning comments, or export/import saved games as JSON.
+- **Scoreboard:** Tracks head-to-head match stats, average latency, and illegal move rates in browser storage.
+- **Offline Mock Provider:** Built-in simulation mode for UI testing without entering any API keys, clearly labeled `[MOCK]`.
+- **Honest First-Run Experience:** No fake moves or silent demos. The arena clearly requests endpoint configuration before starting.
 
-### 2. Installation
+---
+
+## 🔒 Security & Privacy Architecture
+
+This project is deliberately designed to protect your API keys and credentials:
+
+1. **No Backend Server:** The application is purely static HTML, CSS, and JavaScript served by GitHub Pages. There are no server routes, proxies, or databases.
+2. **Direct Browser-to-Provider Fetch:** All API requests are made directly from your browser's `fetch()` API to the endpoint you configure.
+3. **Session-Only Storage by Default:** Credentials are kept in browser memory and `sessionStorage` (automatically wiped when you close the tab).
+4. **Optional Local Storage:** If you choose "Remember on this device", settings are stored in `localStorage` with a visible warning.
+5. **Masked Keys:** Keys in the UI are masked after entry (showing only the last 4 characters).
+6. **Zero Credential Leakage:** API keys are never included in exported PGNs, game JSON logs, error alerts, query strings, or console logs.
+7. **Strict Content Security Policy (CSP):** Blocks external inline scripts, third-party trackers, and untrusted network origins.
+
+---
+
+## 🚀 Running Locally
+
+Ensure you have **Node.js 18+** installed.
+
 ```bash
-git clone <repo-url>
-cd chess
-npm install --ignore-scripts
-```
+# 1. Clone the repository
+git clone https://github.com/<user>/<repo>.git
+cd <repo>
 
-### 3. Environment Variables
-Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
+# 2. Install dependencies
+npm install
 
-Edit `.env` to configure your API keys:
-```env
-# Default OpenAI API Key (Kept server-side only)
-OPENAI_API_KEY=sk-...
-
-# Optional: Custom OpenAI-compatible Base URL (defaults to https://api.openai.com/v1)
-OPENAI_BASE_URL=https://api.openai.com/v1
-
-# Optional: Default Model Name
-OPENAI_MODEL=gpt-4o-mini
-```
-
-> **Note:** If no API key is provided, the arena automatically supports **Mock Mode** ("Mock Grandmaster" and "Mock Tactician") out-of-the-box for offline testing and demonstration.
-
-### 4. Running Locally
-Run the development server:
-```bash
+# 3. Start local development server
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-Or build and run the production server:
+Visit `http://localhost:3000` in your browser.
+
+### Building and Previewing Static Production Build
+
 ```bash
+# Build static files into /dist
 npm run build
-npm run start
+
+# Preview static distribution under a subpath (mimics GitHub Pages)
+npx vite preview --base /ai-chess-arena/
 ```
 
 ---
 
-## How to Add an OpenAI-Compatible Provider
+## 🛠️ Configuring Endpoints in Settings
 
-AI Chess Arena supports any OpenAI-compatible completions API (OpenAI, OpenRouter, Groq, DeepSeek, Ollama, vLLM, LocalAI).
+Click the **Settings** button in the header or the player names in Match Control:
 
-### Option A: Via `.env` (Global Default)
-Set the Base URL and API Key in `.env`:
-```env
-# Example: OpenRouter
-OPENAI_BASE_URL=https://openrouter.ai/api/v1
-OPENAI_API_KEY=sk-or-v1-...
-OPENAI_MODEL=deepseek/deepseek-r1
-
-# Example: Groq
-OPENAI_BASE_URL=https://api.groq.com/openai/v1
-OPENAI_API_KEY=gsk_...
-OPENAI_MODEL=llama-3.3-70b-versatile
-
-# Example: Local Ollama
-OPENAI_BASE_URL=http://localhost:11434/v1
-OPENAI_API_KEY=ollama
-OPENAI_MODEL=qwen2.5:7b
-```
-
-### Option B: In the Web UI (Per Player)
-1. On the **MATCH CONTROL** card, click the player pairings row (`GPT-4o VS Claude 3.5 Sonnet`).
-2. Select one of the presets (GPT-4o, Claude 3.5 Sonnet, DeepSeek R1, Groq Llama 3.3, Mock GM) or enter:
-   - **Display Name**: Label shown on cards
-   - **Model Identifier**: e.g., `gpt-4o`, `deepseek/deepseek-r1`, `llama-3.3-70b-versatile`
-   - **Base URL**: e.g., `https://openrouter.ai/api/v1`
-   - **API Key**: Optional per-model key override (saved in session)
-3. Click **Simpan / Save**.
+| Field | Description | Example |
+|---|---|---|
+| **Display Name** | Label shown on player card and PGN | `Grandmaster White` |
+| **Endpoint Base URL** | OpenAI-compatible API base URL | `https://api.openai.com/v1`, `http://localhost:11434/v1` |
+| **API Key** | Secret key for the provider (stored only in browser) | `sk-...` |
+| **Model Name** | Exact model ID | `gpt-4o`, `anthropic/claude-3.5-sonnet`, `llama3.2` |
+| **Temperature** | Sampling variety (0.0 to 1.2) | `0.7` |
+| **Test Connection** | Sends a tiny 1-token test request to verify URL, key, and CORS | Status & latency in ms |
 
 ---
 
-## How to Swap Piece Images
+## 🌐 CORS Notes (Browser Cross-Origin Requests)
 
-All 12 chess piece images are stored in `/public/pieces/` using standard codes:
-- **White pieces**: `wK.png`, `wQ.png`, `wR.png`, `wB.png`, `wN.png`, `wP.png`
-- **Black pieces**: `bK.png`, `bQ.png`, `bR.png`, `bB.png`, `bN.png`, `bP.png`
+Because AI Chess Arena runs directly in the browser, your configured endpoint must support **Cross-Origin Resource Sharing (CORS)** headers (`Access-Control-Allow-Origin`).
 
-To swap with your own custom set:
-1. Prepare 12 square PNG images (512x512 transparent background recommended).
-2. Name each file matching `{color}{piece}.png` where `color` is `w` or `b` and `piece` is `K`, `Q`, `R`, `B`, `N`, or `P`.
-3. Overwrite the files in `public/pieces/`.
-4. Refresh the app. The preloader will automatically load the new images. If any image fails to load, the app gracefully falls back to Unicode text glyphs (`♔`, `♚`, etc.) with a console warning.
+### Local Providers:
+- **Ollama:** By default, Ollama restricts requests from browser origins. Set `OLLAMA_ORIGINS="*"` when starting Ollama:
+  - *macOS/Linux:* `OLLAMA_ORIGINS="*" ollama serve`
+  - *Windows (PowerShell):* `$env:OLLAMA_ORIGINS="*"; ollama serve`
+- **LM Studio:** Go to **Developer Settings** (local server tab) and enable the **"Enable CORS"** checkbox.
 
----
-
-## Project Structure
-
-```
-├── public/
-│   ├── pieces/              # 12 piece PNG images (wK, wQ, wR, wB, wN, wP, bK, bQ, bR, bB, bN, bP)
-│   └── stockfish/           # Stockfish WASM and Web Worker binary files
-├── src/
-│   ├── app/
-│   │   ├── api/
-│   │   │   └── move/route.ts# Server-side provider client, prompt builder & SSE stream
-│   │   ├── globals.css      # Design tokens, dark theme, motion rules, scrollbars
-│   │   ├── layout.tsx       # Root layout, metadata & LanguageProvider
-│   │   └── page.tsx         # Main Arena two-column spectator interface
-│   ├── components/
-│   │   ├── Board/
-│   │   │   ├── ChessBoard.tsx   # react-chessboard wrapper with custom piece images
-│   │   │   ├── BoardActions.tsx # Putar papan, Salin FEN, Unduh PGN
-│   │   │   └── EvalBar.tsx      # Stockfish centipawn evaluation split bar
-│   │   ├── Commentary/
-│   │   │   └── MoveCommentary.tsx # Live streaming thinking, attempts & latency
-│   │   ├── Control/
-│   │   │   ├── MatchControl.tsx       # Start/pause/step, delays, limits, status badge
-│   │   │   └── ModelSelectorModal.tsx # Model configure modal & presets
-│   │   ├── Header/
-│   │   │   └── Header.tsx       # Brand header, language toggle, modal buttons
-│   │   ├── History/
-│   │   │   └── MoveHistory.tsx  # Move table, eval chips, click-to-jump preview
-│   │   ├── Mascot/
-│   │   │   └── Mascot.tsx       # Fixed decorative blue robot mascot
-│   │   ├── Player/
-│   │   │   └── PlayerCard.tsx   # Avatar, name, captured pieces & state badge
-│   │   ├── Replay/
-│   │   │   └── ReplayModal.tsx  # Saved games list, timeline slider, JSON/PGN export
-│   │   └── Scoreboard/
-│   │       └── ScoreboardModal.tsx # Model pairings stats (W/L/D, latency, illegal rate)
-│   ├── hooks/
-│   │   ├── useChessGame.ts  # Central match state coordinator & game loop
-│   │   └── useStockfish.ts  # Stockfish WASM Web Worker hook
-│   ├── i18n/
-│   │   ├── translations.ts   # Indonesian (default) & English dictionaries
-│   │   └── LanguageContext.tsx # Context provider and translation hook
-│   └── lib/
-│       ├── chess-engine.ts  # Chess rules, move validator, forfeit random, PGN export
-│       ├── piece-renderer.tsx# Custom pieces mapper, preloading, glyph fallbacks
-│       ├── storage.ts       # LocalStorage manager for saved games & scoreboard stats
-│       └── types.ts         # TypeScript data contracts (Match, MoveRecord, etc.)
-├── .env.example
-├── design.md
-├── prd.md
-└── package.json
-```
+### Cloud Providers:
+- Most commercial providers (OpenRouter, Together AI, Groq) allow browser CORS requests by default.
+- If using official OpenAI endpoints directly from client browsers, certain browser privacy extensions or ad-blockers might intercept requests. Use OpenRouter or a local CORS proxy if needed.
 
 ---
 
-## Verification & Testing
+## 🚢 Deploying to GitHub Pages
 
-- **TypeScript check**: `npx tsc --noEmit` passes with 0 errors.
-- **Lint check**: `npm run lint` passes with 0 errors and 0 warnings.
-- **Production Build**: `npm run build` compiles successfully with Turbopack.
-- **Responsive Layout**: Verified at 1280px (two columns), 900px (stacked), and 390px (mobile).
+This repository includes a turnkey GitHub Actions workflow (`.github/workflows/deploy.yml`). No secrets or API keys are needed!
+
+1. Push your clean repository to GitHub.
+2. Go to your repository **Settings** &rarr; **Pages**.
+3. Under **Build and deployment** &rarr; **Source**, select **GitHub Actions**.
+4. Push to the `main` branch. GitHub Actions will build and deploy `dist/` to `https://<user>.github.io/<repo>/`.
+
+---
+
+## ❓ Troubleshooting
+
+| Issue | Cause | Solution |
+|---|---|---|
+| **"Connection failed (CORS or network error)"** | Endpoint blocked browser cross-origin requests. | Enable CORS on your local provider (`OLLAMA_ORIGINS="*"`) or verify network URL. |
+| **"HTTP 401 Unauthorized"** | Invalid or missing API key. | Check your API key in Settings for that player. |
+| **"HTTP 404 Not Found"** | Base URL or model name invalid. | Ensure URL ends with `/v1` (e.g. `http://localhost:11434/v1`). |
+| **Stockfish Eval not moving** | Web Worker / WASM blocked. | GitHub Pages requires single-threaded WASM without SharedArrayBuffer (already bundled). Check browser console. |
+| **Match stops with "Error"** | Provider returned an error or illegal move. | Click **"Coba Lagi (Retry)"** or open Settings to reconfigure. |
+
+---
+
+## 📜 Credits & Third-Party Licenses
+
+- **[Stockfish](https://stockfishchess.org/)**: The world's leading open-source chess engine. Included as a single-threaded WebAssembly / Emscripten build (`stockfish.js`) under the [GNU General Public License v3.0 (GPLv3)](https://www.gnu.org/licenses/gpl-3.0.html). Source code available at [official Stockfish repository](https://github.com/official-stockfish/Stockfish).
+- **[chess.js](https://github.com/jhlywa/chess.js)**: Chess rules and move validation library, licensed under the [BSD 2-Clause License](https://opensource.org/licenses/BSD-2-Clause).
+- **[react-chessboard](https://github.com/Clariity/react-chessboard)**: Chessboard UI component, licensed under the [MIT License](https://opensource.org/licenses/MIT).
+- **[Lucide Icons](https://lucide.dev)**: UI iconography, licensed under the [ISC License](https://opensource.org/licenses/ISC).
+- **Piece Images**: AI-generated original chess piece assets located in `public/pieces/`. Free to use and distribute under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

@@ -1,12 +1,30 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Match, MoveRecord } from '../../lib/types';
-import { getSavedMatches, deleteSavedMatch } from '../../lib/storage';
+import {
+  getSavedMatches,
+  deleteSavedMatch,
+  clearAllSavedMatches,
+  exportMatchesAsJson,
+  importMatchesFromJson,
+} from '../../lib/storage';
 import { useTranslation } from '../../i18n/LanguageContext';
 import { exportPgnWithComments } from '../../lib/chess-engine';
 import { ChessBoard } from '../Board/ChessBoard';
-import { X, Play, Pause, SkipBack, SkipForward, ChevronLeft, ChevronRight, Download, Trash2, Calendar, Trophy } from 'lucide-react';
+import {
+  X,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Trash2,
+  Calendar,
+  Trophy,
+  Upload,
+  FileJson,
+} from 'lucide-react';
 
 interface ReplayModalProps {
   isOpen: boolean;
@@ -19,6 +37,8 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
   const [selectedGame, setSelectedGame] = useState<Match | null>(null);
   const [currentPly, setCurrentPly] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -27,6 +47,7 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
         setSelectedGame(null);
         setCurrentPly(0);
         setIsPlaying(false);
+        setFeedbackMsg(null);
       }, 0);
       return () => clearTimeout(tId);
     }
@@ -56,13 +77,23 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     deleteSavedMatch(id);
-    setSavedGames(getSavedMatches());
+    const updated = getSavedMatches();
+    setSavedGames(updated);
     if (selectedGame?.id === id) {
       setSelectedGame(null);
     }
   };
 
-  const handleExportJson = (game: Match) => {
+  const handleClearAll = () => {
+    if (window.confirm('Hapus semua pertandingan yang tersimpan di browser ini?')) {
+      clearAllSavedMatches();
+      setSavedGames([]);
+      setSelectedGame(null);
+      setFeedbackMsg('Semua data pertandingan telah dihapus.');
+    }
+  };
+
+  const handleExportSingleJson = (game: Match) => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(game, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
@@ -85,6 +116,27 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
     URL.revokeObjectURL(url);
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const content = evt.target?.result as string;
+      const res = importMatchesFromJson(content);
+      if (res.success) {
+        setSavedGames(getSavedMatches());
+        setFeedbackMsg(`Berhasil mengimpor ${res.count} pertandingan.`);
+      } else {
+        setFeedbackMsg(`Gagal mengimpor: ${res.error || 'Format JSON tidak valid'}`);
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // When a game is selected, determine displayed FEN and move
   const displayedFen = selectedGame
     ? currentPly === 0
@@ -92,9 +144,8 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
       : selectedGame.moves[currentPly - 1]?.fenAfter || selectedGame.currentFen
     : '';
 
-  const activeMove: MoveRecord | undefined = selectedGame && currentPly > 0
-    ? selectedGame.moves[currentPly - 1]
-    : undefined;
+  const activeMove: MoveRecord | undefined =
+    selectedGame && currentPly > 0 ? selectedGame.moves[currentPly - 1] : undefined;
 
   const lastMoveSquares = activeMove ? [activeMove.from, activeMove.to] : [];
 
@@ -144,7 +195,9 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Trophy size={18} color="var(--accent-strong)" />
             <h2 style={{ fontSize: '16px', fontWeight: 600 }}>
-              {selectedGame ? `${t.replayMode}: ${selectedGame.white.displayName} vs ${selectedGame.black.displayName}` : t.savedGames}
+              {selectedGame
+                ? `${t.replayMode}: ${selectedGame.white.displayName} vs ${selectedGame.black.displayName}`
+                : t.savedGames}
             </h2>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -181,6 +234,106 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
             </button>
           </div>
         </div>
+
+        {/* Action Bar for List View (Export All, Import, Clear All) */}
+        {!selectedGame && (
+          <div
+            style={{
+              padding: '10px 20px',
+              backgroundColor: 'var(--surface-2)',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={exportMatchesAsJson}
+                disabled={savedGames.length === 0}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  color: 'var(--text)',
+                  fontSize: '11px',
+                  cursor: savedGames.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: savedGames.length === 0 ? 0.5 : 1,
+                }}
+              >
+                <FileJson size={13} color="var(--accent-strong)" />
+                <span>Ekspor Semua (JSON)</span>
+              </button>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  color: 'var(--text)',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Upload size={13} />
+                <span>Impor (JSON)</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+            </div>
+
+            {savedGames.length > 0 && (
+              <button
+                onClick={handleClearAll}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '5px 8px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--danger)',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Trash2 size={12} />
+                <span>Hapus Semua</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Feedback message */}
+        {feedbackMsg && (
+          <div
+            style={{
+              padding: '8px 20px',
+              backgroundColor: 'rgba(125, 138, 94, 0.15)',
+              fontSize: '11px',
+              color: 'var(--accent-strong)',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
+            {feedbackMsg}
+          </div>
+        )}
 
         {/* Modal Content */}
         {!selectedGame ? (
@@ -247,7 +400,9 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
                           <Calendar size={12} />
                           {new Date(game.createdAt).toLocaleDateString()}
                         </span>
-                        <span>{game.moves.length} {t.ply}</span>
+                        <span>
+                          {game.moves.length} {t.ply}
+                        </span>
                       </div>
                     </div>
 
@@ -301,16 +456,22 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
           >
             {/* Left: Replay Board */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-              <ChessBoard
-                fen={displayedFen}
-                orientation="white"
-                lastMoveSquares={lastMoveSquares}
-              />
+              <ChessBoard fen={displayedFen} orientation="white" lastMoveSquares={lastMoveSquares} />
 
               {/* Timeline Slider & Navigation Controls */}
               <div style={{ width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
-                  <span>Ply: {currentPly} / {selectedGame.moves.length}</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '12px',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  <span>
+                    Ply: {currentPly} / {selectedGame.moves.length}
+                  </span>
                   <span>{activeMove ? `${activeMove.color === 'w' ? 'White' : 'Black'}: ${activeMove.san}` : 'Start'}</span>
                 </div>
 
@@ -388,7 +549,14 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--text-muted)',
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     {t.reasoning}
                   </span>
                   {activeMove && (
@@ -414,7 +582,7 @@ export const ReplayModal: React.FC<ReplayModalProps> = ({ isOpen, onClose }) => 
 
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
-                  onClick={() => handleExportJson(selectedGame)}
+                  onClick={() => handleExportSingleJson(selectedGame)}
                   style={{
                     flex: 1,
                     padding: '8px',

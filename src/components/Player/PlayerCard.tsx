@@ -141,21 +141,63 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
           </div>
         )}
 
-        {/* Right: State badge */}
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            padding: '3px 8px',
-            borderRadius: '4px',
-            textTransform: 'uppercase',
-            whiteSpace: 'nowrap',
-            ...badgeStyle,
-          }}
-        >
-          {badgeText}
+        {/* Right: Badges & State */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Temperature badge */}
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '10px',
+              fontWeight: 500,
+              padding: '2px 6px',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-muted)',
+              whiteSpace: 'nowrap',
+            }}
+            title={`Sampling Temperature: ${player.temperature ?? 0.7}`}
+          >
+            T: {(player.temperature ?? 0.7).toFixed(1)}
+          </div>
+
+          {/* Explicit Mock indicator */}
+          {player.provider === 'mock' && (
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                padding: '2px 5px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(234, 154, 42, 0.15)',
+                border: '1px solid rgba(234, 154, 42, 0.4)',
+                color: '#ea9a2a',
+                whiteSpace: 'nowrap',
+              }}
+              title="Simulated Mock Model"
+            >
+              MOCK
+            </div>
+          )}
+
+          {/* State badge */}
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '10px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+              ...badgeStyle,
+            }}
+          >
+            {badgeText}
+          </div>
         </div>
       </div>
     </div>

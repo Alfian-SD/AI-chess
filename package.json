@@ -1,28 +1,30 @@
 {
   "name": "ai-chess-arena",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
     "lucide-react": "^1.52.0",
-    "next": "16.3.8",
-    "react": "19.2.8",
+    "react": "^19.2.8",
     "react-chessboard": "^5.12.1",
-    "react-dom": "19.2.8",
+    "react-dom": "^19.2.8",
     "stockfish.js": "^10.0.2"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.8",
-    "typescript": "^5"
+    "@types/node": "^20.17.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.15.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^6.0.0"
   }
 }

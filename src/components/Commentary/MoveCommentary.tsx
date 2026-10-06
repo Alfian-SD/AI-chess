@@ -276,24 +276,69 @@ export const MoveCommentary: React.FC<MoveCommentaryProps> = ({
         </button>
       )}
 
-      {/* Footer Row: LANGKAH N - SAN | Latency */}
+      {/* Enhanced Footer Row: Provenance Tag, Model, Temp, Latency, Game ID */}
       {lastMove && !isThinking && (
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            flexDirection: 'column',
+            gap: '6px',
             fontFamily: 'var(--font-mono)',
             fontSize: '10px',
             color: 'var(--text-muted)',
-            paddingTop: '2px',
-            borderTop: '1px solid rgba(42, 42, 42, 0.6)',
+            paddingTop: '6px',
+            borderTop: '1px solid var(--border)',
           }}
         >
-          <span>
-            {t.move} {lastMove.ply} - {lastMove.san}
-          </span>
-          <span>{lastMove.latencyMs} {t.milliseconds}</span>
+          {/* Top row: Ply & Move SAN + Source Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                {t.move} {lastMove.ply} - {lastMove.san}
+              </span>
+
+              {/* Source Tag: LIVE | MOCK | FALLBACK */}
+              <span
+                style={{
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '3px',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                  ...(lastMove.source === 'MOCK'
+                    ? { backgroundColor: 'rgba(234, 154, 42, 0.15)', color: '#ea9a2a', border: '1px solid rgba(234, 154, 42, 0.4)' }
+                    : lastMove.source === 'FALLBACK'
+                    ? { backgroundColor: 'rgba(217, 83, 79, 0.15)', color: '#d9534f', border: '1px solid rgba(217, 83, 79, 0.4)' }
+                    : { backgroundColor: 'rgba(125, 138, 94, 0.2)', color: 'var(--accent-strong)', border: '1px solid var(--accent)' }),
+                }}
+              >
+                {lastMove.source || (lastMove.forfeitRandom ? 'FALLBACK' : activePlayer.provider === 'mock' ? 'MOCK' : 'LIVE')}
+              </span>
+            </div>
+
+            <span>{lastMove.latencyMs} {t.milliseconds}</span>
+          </div>
+
+          {/* Bottom metadata row: Provider, Model, Temperature, Game ID */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '6px',
+              fontSize: '9px',
+              color: 'var(--text-muted)',
+            }}
+          >
+            <span>
+              {lastMove.provider || activePlayer.provider} &bull; {lastMove.model || activePlayer.model} &bull; T: {(lastMove.temperature ?? activePlayer.temperature ?? 0.7).toFixed(1)}
+            </span>
+            <span title={`Game Session ID: ${lastMove.gameId || 'arena_default'}`} style={{ opacity: 0.8 }}>
+              ID: {lastMove.gameId ? lastMove.gameId.slice(0, 16) : 'arena_default'}
+            </span>
+          </div>
         </div>
       )}
     </div>

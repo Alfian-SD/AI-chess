@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Content Security Policy: connect-src allows https and localhost/127.0.0.1, blocks external scripts and untrusted sources -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self' blob:; object-src 'none';"
+    />
+    <link rel="icon" type="image/x-icon" href="./favicon.ico" />
+    <title>AI Chess Arena - Live Model Reasoning Arena</title>
+    <meta
+      name="description"
+      content="Watch two AI models play full chess matches against each other with real-time visible reasoning."
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

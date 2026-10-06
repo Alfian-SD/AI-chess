@@ -1,20 +1,20 @@
-'use client';
+import React, { useState, useEffect } from 'react';
+import { useChessGame } from './hooks/useChessGame';
+import { Header } from './components/Header/Header';
+import { PlayerCard } from './components/Player/PlayerCard';
+import { ChessBoard } from './components/Board/ChessBoard';
+import { BoardActions } from './components/Board/BoardActions';
+import { MatchControl } from './components/Control/MatchControl';
+import { MoveCommentary } from './components/Commentary/MoveCommentary';
+import { MoveHistory } from './components/History/MoveHistory';
+import { Mascot } from './components/Mascot/Mascot';
+import { ScoreboardModal } from './components/Scoreboard/ScoreboardModal';
+import { ReplayModal } from './components/Replay/ReplayModal';
+import { SettingsModal } from './components/Settings/SettingsModal';
+import { WelcomeModal } from './components/Welcome/WelcomeModal';
+import { PlayerState } from './lib/types';
 
-import React, { useState } from 'react';
-import { useChessGame } from '../hooks/useChessGame';
-import { Header } from '../components/Header/Header';
-import { PlayerCard } from '../components/Player/PlayerCard';
-import { ChessBoard } from '../components/Board/ChessBoard';
-import { BoardActions } from '../components/Board/BoardActions';
-import { MatchControl } from '../components/Control/MatchControl';
-import { MoveCommentary } from '../components/Commentary/MoveCommentary';
-import { MoveHistory } from '../components/History/MoveHistory';
-import { Mascot } from '../components/Mascot/Mascot';
-import { ScoreboardModal } from '../components/Scoreboard/ScoreboardModal';
-import { ReplayModal } from '../components/Replay/ReplayModal';
-import { PlayerState } from '../lib/types';
-
-export default function ArenaPage() {
+export function App() {
   const {
     match,
     displayedFen,
@@ -28,6 +28,7 @@ export default function ArenaPage() {
     previewPly,
     captured,
     currentEval,
+    isConfigured,
     startMatch,
     pauseMatch,
     stepMove,
@@ -37,13 +38,23 @@ export default function ArenaPage() {
     setMaxPly,
     setWhitePlayer,
     setBlackPlayer,
+    setMockEnabled,
     flipBoard,
     selectHistoryPly,
     getPgnString,
   } = useChessGame();
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
   const [isScoreboardOpen, setIsScoreboardOpen] = useState(false);
   const [isReplayOpen, setIsReplayOpen] = useState(false);
+
+  // Honest first-run experience: show welcome modal on first visit if not configured
+  useEffect(() => {
+    if (!isConfigured && !match.settings.mockEnabled) {
+      setIsWelcomeOpen(true);
+    }
+  }, [isConfigured, match.settings.mockEnabled]);
 
   // Compute orientation-dependent players for board top and bottom
   const isFlipped = boardOrientation === 'black';
@@ -78,6 +89,12 @@ export default function ArenaPage() {
     ? `${displayedMove.color === 'w' ? 'White' : 'Black'} plays ${displayedMove.san}`
     : undefined;
 
+  const handleSaveSettings = (white: typeof match.white, black: typeof match.black, mock: boolean) => {
+    setWhitePlayer(white);
+    setBlackPlayer(black);
+    setMockEnabled(mock);
+  };
+
   return (
     <div
       style={{
@@ -90,6 +107,8 @@ export default function ArenaPage() {
     >
       {/* Top Header */}
       <Header
+        mockEnabled={match.settings.mockEnabled}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenScoreboard={() => setIsScoreboardOpen(true)}
         onOpenReplay={() => setIsReplayOpen(true)}
       />
@@ -149,7 +168,10 @@ export default function ArenaPage() {
               settings={match.settings}
               whiteConfig={match.white}
               blackConfig={match.black}
+              openingName={match.openingName}
+              drawReason={match.drawReason}
               errorMessage={match.errorMessage}
+              isConfigured={isConfigured}
               onStart={startMatch}
               onPause={pauseMatch}
               onReset={resetMatch}
@@ -157,10 +179,7 @@ export default function ArenaPage() {
               onRetry={retryCurrentTurn}
               onSetMoveDelay={setMoveDelay}
               onSetMaxPly={setMaxPly}
-              onSavePlayerConfigs={(w, b) => {
-                setWhitePlayer(w);
-                setBlackPlayer(b);
-              }}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
             {/* Move Commentary Card */}
@@ -184,10 +203,26 @@ export default function ArenaPage() {
         </div>
       </main>
 
-      {/* Decorative Fixed Mascot */}
+      {/* Decorative Mascot */}
       <Mascot />
 
       {/* Modals */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        whiteConfig={match.white}
+        blackConfig={match.black}
+        mockEnabled={Boolean(match.settings.mockEnabled)}
+        onSave={handleSaveSettings}
+      />
+
+      <WelcomeModal
+        isOpen={isWelcomeOpen}
+        onClose={() => setIsWelcomeOpen(false)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onEnableMock={() => setMockEnabled(true)}
+      />
+
       <ScoreboardModal
         isOpen={isScoreboardOpen}
         onClose={() => setIsScoreboardOpen(false)}
@@ -198,8 +233,8 @@ export default function ArenaPage() {
         onClose={() => setIsReplayOpen(false)}
       />
 
-      {/* Responsive Styles */}
-      <style jsx>{`
+      {/* Responsive Layout Styles */}
+      <style>{`
         .arena-grid {
           display: grid;
           grid-template-columns: minmax(340px, 480px) minmax(320px, 375px);

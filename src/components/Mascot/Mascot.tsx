@@ -56,7 +56,7 @@ export const Mascot: React.FC = () => {
         <rect x="13" y="44" width="6" height="10" rx="3" fill="#2563eb" />
         <rect x="45" y="44" width="6" height="10" rx="3" fill="#2563eb" />
       </svg>
-      <style jsx>{`
+      <style>{`
         @media (max-width: 900px) {
           .arena-mascot {
             display: none !important;

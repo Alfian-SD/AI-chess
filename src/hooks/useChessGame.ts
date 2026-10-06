@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Chess, Move } from 'chess.js';
 import {
@@ -16,48 +14,79 @@ import {
   getLegalMoves,
   parseModelMove,
   validateMove,
-  getRandomLegalMove,
   checkGameEnd,
   getCapturedPieces,
   exportPgnWithComments,
 } from '../lib/chess-engine';
+import { getRandomOpening, OpeningLine } from '../lib/openings';
 import { saveMatch } from '../lib/storage';
+import { streamModelTurn } from '../lib/llm-client';
+import {
+  loadSavedSettings,
+  saveSettings,
+  isPlayerConfigured,
+  MOCK_WHITE_PLAYER,
+  MOCK_BLACK_PLAYER,
+} from '../lib/settings';
 import { useStockfish } from './useStockfish';
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
+function generateGameId(): string {
+  return `game_${Math.random().toString(36).substring(2, 8)}_${Date.now().toString(36)}`;
+}
+
+function getPositionKey(fen: string): string {
+  return fen.split(' ').slice(0, 4).join(' ');
+}
+
 const DEFAULT_SETTINGS: MatchSettings = {
   moveDelayMs: 1000,
   maxPly: 200,
-};
-
-const DEFAULT_WHITE: PlayerConfig = {
-  displayName: 'GPT-4o',
-  provider: 'mock',
-  model: 'gpt-4o',
-};
-
-const DEFAULT_BLACK: PlayerConfig = {
-  displayName: 'Claude 3.5 Sonnet',
-  provider: 'mock',
-  model: 'claude-3-5-sonnet',
+  randomOpening: true,
+  mockEnabled: false,
 };
 
 export function useChessGame() {
   const chessRef = useRef<Chess>(createChessInstance());
   const { evaluatePosition, currentEval } = useStockfish();
 
-  const [match, setMatch] = useState<Match>(() => ({
-    id: `match_${Date.now()}`,
-    createdAt: new Date().toISOString(),
-    status: 'idle',
-    white: DEFAULT_WHITE,
-    black: DEFAULT_BLACK,
-    settings: DEFAULT_SETTINGS,
-    moves: [],
-    currentFen: START_FEN,
-    activeColor: 'w',
-  }));
+  // Active opening book reference
+  const activeOpeningRef = useRef<OpeningLine | null>(null);
+
+  const [match, setMatch] = useState<Match>(() => {
+    const initialGameId = generateGameId();
+    const opening = getRandomOpening();
+    activeOpeningRef.current = opening;
+
+    const saved = loadSavedSettings();
+    const isMock = saved.mockEnabled;
+
+    const whiteConfig: PlayerConfig = isMock
+      ? { ...MOCK_WHITE_PLAYER }
+      : { ...saved.white };
+
+    const blackConfig: PlayerConfig = isMock
+      ? { ...MOCK_BLACK_PLAYER }
+      : { ...saved.black };
+
+    return {
+      id: `match_${Date.now()}`,
+      gameId: initialGameId,
+      createdAt: new Date().toISOString(),
+      status: 'idle',
+      white: whiteConfig,
+      black: blackConfig,
+      settings: {
+        ...DEFAULT_SETTINGS,
+        mockEnabled: saved.mockEnabled,
+      },
+      moves: [],
+      currentFen: START_FEN,
+      activeColor: 'w',
+      openingName: opening.name,
+    };
+  });
 
   const [liveReasoning, setLiveReasoning] = useState<string>('');
   const [liveReasoningType, setLiveReasoningType] = useState<'reasoning' | 'explanation'>('explanation');
@@ -66,7 +95,7 @@ export function useChessGame() {
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
   const [previewPly, setPreviewPly] = useState<number | null>(null);
 
-  // Status and execution refs to avoid closure stale issues in async loops
+  // Status and execution refs to avoid stale closure state
   const matchStatusRef = useRef<MatchStatus>('idle');
   const matchRef = useRef<Match>(match);
   const isExecutingRef = useRef<boolean>(false);
@@ -101,6 +130,7 @@ export function useChessGame() {
           status: 'finished',
           result: endCheck.result,
           terminationReason: endCheck.reasonKey,
+          drawReason: endCheck.drawReason,
         };
         saveMatch(finished);
         return finished;
@@ -119,146 +149,137 @@ export function useChessGame() {
     const fenBefore = currentChess.fen();
     const pgnBefore = currentChess.pgn();
     const moveNumber = Math.floor(currentMatch.moves.length / 2) + 1;
+    const currentPly = currentMatch.moves.length;
 
     let chosenSan: string | null = null;
     let chosenMoveObj: Move | null = null;
-    let isForfeit = false;
     let finalReasoning = '';
     let finalReasoningType: 'reasoning' | 'explanation' = 'explanation';
     let totalLatencyMs = 0;
+    let responseSource: 'LIVE' | 'MOCK' | 'FALLBACK' = activePlayer.provider === 'mock' ? 'MOCK' : 'LIVE';
+    let isBookMove = false;
     const attemptsCollected: MoveAttempt[] = [];
 
-    let attemptNumber = 1;
-    let previousError: string | undefined = undefined;
-
-    while (attemptNumber <= 3 && !chosenSan) {
-      if (matchStatusRef.current === 'paused' && !isSingleStep) {
-        // Paused by user during thinking
-        break;
+    // 1. Check opening repertoire for the first plies
+    if (
+      currentMatch.settings.randomOpening !== false &&
+      activeOpeningRef.current &&
+      currentPly < activeOpeningRef.current.moves.length
+    ) {
+      const candidateBookMove = activeOpeningRef.current.moves[currentPly];
+      const bookValidation = validateMove(currentChess, candidateBookMove);
+      if (bookValidation.valid && bookValidation.moveObj) {
+        chosenSan = bookValidation.moveObj.san;
+        chosenMoveObj = bookValidation.moveObj;
+        isBookMove = true;
+        finalReasoning = `Opening Repertoire [${activeOpeningRef.current.name}]: Executing theoretical line ${chosenSan}. (${activeOpeningRef.current.description})`;
+        finalReasoningType = 'explanation';
+        setLiveReasoning(finalReasoning);
+        setLiveReasoningType('explanation');
+        totalLatencyMs = 15;
+        responseSource = 'LIVE';
       }
+    }
 
-      try {
-        const res = await fetch('/api/move', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fen: fenBefore,
-            pgn: pgnBefore,
-            color: activeColor,
-            legalMoves,
-            player: activePlayer,
-            attemptNumber,
-            previousError,
-          }),
-        });
+    // 2. Query the AI model directly from the browser
+    if (!chosenSan) {
+      const currentPosKey = getPositionKey(fenBefore);
+      let positionCount = 0;
+      if (getPositionKey(START_FEN) === currentPosKey) positionCount++;
+      for (const m of currentMatch.moves) {
+        if (getPositionKey(m.fenAfter) === currentPosKey) {
+          positionCount++;
+        }
+      }
+      const isRepeatedPosition = positionCount >= 2;
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({ error: `Server error ${res.status}` }));
-          throw new Error(errData.error || `HTTP ${res.status}`);
+      let attemptNumber = 1;
+      let previousError: string | undefined = undefined;
+
+      while (attemptNumber <= 3 && !chosenSan) {
+        if (matchStatusRef.current === 'paused' && !isSingleStep) {
+          break;
         }
 
-        // Read SSE stream
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let streamedReasoning = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-              if (data.type === 'chunk') {
-                streamedReasoning += data.text;
-                setLiveReasoning((prev) => prev + data.text);
-              } else if (data.type === 'done') {
-                finalReasoning = data.reasoning || streamedReasoning;
-                finalReasoningType = data.reasoningType || 'explanation';
-                setLiveReasoningType(finalReasoningType);
-                totalLatencyMs += data.latencyMs || 0;
-              } else if (data.type === 'error') {
-                throw new Error(data.message);
-              }
-            } catch (e: unknown) {
-              const msg = e instanceof Error ? e.message : String(e);
-              if (msg && msg !== 'Unexpected end of JSON input') {
-                throw e;
-              }
+        try {
+          setLiveReasoning('');
+          const turnResult = await streamModelTurn(
+            {
+              fen: fenBefore,
+              pgn: pgnBefore,
+              color: activeColor,
+              legalMoves,
+              player: activePlayer,
+              attemptNumber,
+              previousError,
+              gameId: currentMatch.gameId,
+              moveNumber,
+              isRepeatedPosition,
+            },
+            (chunk) => {
+              setLiveReasoning((prev) => prev + chunk);
             }
+          );
+
+          finalReasoning = turnResult.reasoning;
+          finalReasoningType = turnResult.reasoningType;
+          totalLatencyMs += turnResult.latencyMs;
+          responseSource = turnResult.source;
+
+          // Parse and validate move
+          const parsed = parseModelMove(turnResult.fullOutput || finalReasoning);
+          if (!parsed.san) {
+            const attemptError = parsed.error || 'Move syntax invalid (must end with MOVE: <san>)';
+            attemptsCollected.push({ raw: turnResult.fullOutput, error: attemptError });
+            setCurrentAttempts([...attemptsCollected]);
+            previousError = attemptError;
+            attemptNumber++;
+            continue;
           }
-        }
 
-        // Validate parsed move
-        const parsed = parseModelMove(finalReasoning || streamedReasoning);
-        if (!parsed.san) {
-          const attemptError = parsed.error || 'Move syntax invalid';
-          attemptsCollected.push({ raw: streamedReasoning, error: attemptError });
-          setCurrentAttempts([...attemptsCollected]);
-          previousError = attemptError;
-          attemptNumber++;
-          continue;
-        }
+          const validation = validateMove(currentChess, parsed.san);
+          if (!validation.valid || !validation.moveObj) {
+            const attemptError = validation.error || `Move '${parsed.san}' is illegal`;
+            attemptsCollected.push({ raw: turnResult.fullOutput, error: attemptError, san: parsed.san });
+            setCurrentAttempts([...attemptsCollected]);
+            previousError = attemptError;
+            attemptNumber++;
+            continue;
+          }
 
-        const validation = validateMove(currentChess, parsed.san);
-        if (!validation.valid || !validation.moveObj) {
-          const attemptError = validation.error || `Move '${parsed.san}' is illegal`;
-          attemptsCollected.push({ raw: streamedReasoning, error: attemptError, san: parsed.san });
-          setCurrentAttempts([...attemptsCollected]);
-          previousError = attemptError;
-          attemptNumber++;
-          continue;
+          // Valid move found
+          chosenSan = validation.moveObj.san;
+          chosenMoveObj = validation.moveObj;
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : 'Error communicating with model provider';
+          setIsThinking(false);
+          isExecutingRef.current = false;
+          setMatch((prev) => ({
+            ...prev,
+            status: 'error',
+            errorMessage: errMsg,
+          }));
+          return;
         }
+      }
+    }
 
-        // Successfully found legal move!
-        chosenSan = validation.moveObj.san;
-        chosenMoveObj = validation.moveObj;
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : 'Error occurred while contacting provider';
-        console.error('API or Turn execution error:', err);
-        setIsThinking(false);
-        isExecutingRef.current = false;
+    // Never silently invent moves! Pause with clear error and Retry button
+    if (!chosenSan || !chosenMoveObj) {
+      setIsThinking(false);
+      isExecutingRef.current = false;
+      if (matchStatusRef.current !== 'paused') {
         setMatch((prev) => ({
           ...prev,
           status: 'error',
-          errorMessage: errMsg,
+          errorMessage:
+            'AI provider failed to generate a valid legal move after 3 attempts. Game paused. Click Retry to re-evaluate.',
         }));
-        return;
       }
-    }
-
-    // If 3 attempts failed, forfeit move fallback
-    if (!chosenSan) {
-      if (matchStatusRef.current === 'paused' && !isSingleStep) {
-        setIsThinking(false);
-        isExecutingRef.current = false;
-        return;
-      }
-
-      const forfeitFallback = getRandomLegalMove(currentChess);
-      chosenSan = forfeitFallback.san;
-      chosenMoveObj = forfeitFallback.moveObj;
-      isForfeit = true;
-      if (!finalReasoning) {
-        finalReasoning = `Model failed 3 attempts. Fallback legal move selected: ${chosenSan}`;
-      }
-    }
-
-    if (!chosenMoveObj || !chosenSan) {
-      setIsThinking(false);
-      isExecutingRef.current = false;
       return;
     }
 
-    // Apply move to chess
+    // Apply move to chess instance
     currentChess.move(chosenMoveObj);
     const fenAfter = currentChess.fen();
 
@@ -275,9 +296,14 @@ export function useChessGame() {
       reasoningType: finalReasoningType,
       attempts: attemptsCollected,
       latencyMs: totalLatencyMs,
-      forfeitRandom: isForfeit,
+      forfeitRandom: false,
       evalCp: currentEval.cp,
       evalMate: currentEval.mate,
+      source: isBookMove ? 'LIVE' : responseSource,
+      provider: activePlayer.provider,
+      model: activePlayer.model,
+      temperature: activePlayer.temperature ?? 0.7,
+      gameId: currentMatch.gameId,
     };
 
     // Update Stockfish eval for new position
@@ -294,6 +320,7 @@ export function useChessGame() {
         status: isFinished ? 'finished' : isSingleStep ? 'paused' : prev.status,
         result: afterEndCheck.result,
         terminationReason: afterEndCheck.reasonKey,
+        drawReason: afterEndCheck.drawReason,
         currentFen: fenAfter,
         activeColor: currentChess.turn() as PlayerColor,
         moves: nextMoves,
@@ -322,7 +349,17 @@ export function useChessGame() {
     executeTurnRef.current = executeTurn;
   }, [executeTurn]);
 
+  // Check if players are configured to play
+  const isConfigured = useMemo(() => {
+    const isMock = match.settings.mockEnabled;
+    return isPlayerConfigured(match.white, isMock) && isPlayerConfigured(match.black, isMock);
+  }, [match.white, match.black, match.settings.mockEnabled]);
+
   const startMatch = useCallback(() => {
+    if (!isConfigured) {
+      // Return false to signal caller to show settings/welcome modal
+      return false;
+    }
     setPreviewPly(null);
     setMatch((prev) => ({
       ...prev,
@@ -334,7 +371,8 @@ export function useChessGame() {
     setTimeout(() => {
       executeTurnRef.current(false);
     }, 100);
-  }, []);
+    return true;
+  }, [isConfigured]);
 
   const pauseMatch = useCallback(() => {
     setMatch((prev) => ({
@@ -345,9 +383,11 @@ export function useChessGame() {
   }, []);
 
   const stepMove = useCallback(() => {
+    if (!isConfigured) return false;
     setPreviewPly(null);
     executeTurnRef.current(true);
-  }, []);
+    return true;
+  }, [isConfigured]);
 
   const resetMatch = useCallback(() => {
     matchStatusRef.current = 'idle';
@@ -357,8 +397,16 @@ export function useChessGame() {
     setCurrentAttempts([]);
     setPreviewPly(null);
 
+    const newGameId = generateGameId();
+    const opening =
+      matchRef.current.settings.randomOpening !== false
+        ? getRandomOpening(matchRef.current.settings.reproducibleSeed)
+        : null;
+    activeOpeningRef.current = opening;
+
     setMatch((prev) => ({
       id: `match_${Date.now()}`,
+      gameId: newGameId,
       createdAt: new Date().toISOString(),
       status: 'idle',
       white: prev.white,
@@ -369,6 +417,8 @@ export function useChessGame() {
       activeColor: 'w',
       result: undefined,
       terminationReason: undefined,
+      drawReason: undefined,
+      openingName: opening ? opening.name : undefined,
       errorMessage: undefined,
     }));
 
@@ -399,12 +449,43 @@ export function useChessGame() {
     }));
   }, []);
 
+  const setRandomOpening = useCallback((enabled: boolean) => {
+    setMatch((prev) => {
+      const updated = {
+        ...prev,
+        settings: { ...prev.settings, randomOpening: enabled },
+      };
+      if (!enabled) {
+        activeOpeningRef.current = null;
+        updated.openingName = undefined;
+      } else if (!activeOpeningRef.current && prev.moves.length === 0) {
+        const op = getRandomOpening(prev.settings.reproducibleSeed);
+        activeOpeningRef.current = op;
+        updated.openingName = op.name;
+      }
+      return updated;
+    });
+  }, []);
+
   const setWhitePlayer = useCallback((config: PlayerConfig) => {
     setMatch((prev) => ({ ...prev, white: config }));
   }, []);
 
   const setBlackPlayer = useCallback((config: PlayerConfig) => {
     setMatch((prev) => ({ ...prev, black: config }));
+  }, []);
+
+  const setMockEnabled = useCallback((enabled: boolean) => {
+    setMatch((prev) => {
+      const whiteConfig = enabled ? { ...MOCK_WHITE_PLAYER } : { ...prev.white };
+      const blackConfig = enabled ? { ...MOCK_BLACK_PLAYER } : { ...prev.black };
+      return {
+        ...prev,
+        white: whiteConfig,
+        black: blackConfig,
+        settings: { ...prev.settings, mockEnabled: enabled },
+      };
+    });
   }, []);
 
   const flipBoard = useCallback(() => {
@@ -416,17 +497,17 @@ export function useChessGame() {
   }, []);
 
   // Compute displayed FEN and last move squares
-  const displayedFen = previewPly !== null && match.moves[previewPly - 1]
-    ? match.moves[previewPly - 1].fenAfter
-    : match.currentFen;
+  const displayedFen =
+    previewPly !== null && match.moves[previewPly - 1]
+      ? match.moves[previewPly - 1].fenAfter
+      : match.currentFen;
 
-  const displayedMove = previewPly !== null && match.moves[previewPly - 1]
-    ? match.moves[previewPly - 1]
-    : match.moves[match.moves.length - 1];
+  const displayedMove =
+    previewPly !== null && match.moves[previewPly - 1]
+      ? match.moves[previewPly - 1]
+      : match.moves[match.moves.length - 1];
 
-  const lastMoveSquares = displayedMove
-    ? [displayedMove.from, displayedMove.to]
-    : [];
+  const lastMoveSquares = displayedMove ? [displayedMove.from, displayedMove.to] : [];
 
   const captured = useMemo(() => {
     return getCapturedPieces(new Chess(displayedFen));
@@ -449,6 +530,7 @@ export function useChessGame() {
     previewPly,
     captured,
     currentEval,
+    isConfigured,
     startMatch,
     pauseMatch,
     stepMove,
@@ -456,8 +538,10 @@ export function useChessGame() {
     retryCurrentTurn,
     setMoveDelay,
     setMaxPly,
+    setRandomOpening,
     setWhitePlayer,
     setBlackPlayer,
+    setMockEnabled,
     flipBoard,
     selectHistoryPly,
     getPgnString,

@@ -5,6 +5,7 @@ export interface GameEndInfo {
   isOver: boolean;
   result?: string; // '1-0' | '0-1' | '1/2-1/2'
   reasonKey?: string;
+  drawReason?: string;
   winnerColor?: PlayerColor;
 }
 
@@ -28,7 +29,7 @@ export function parseModelMove(rawOutput: string): { san: string | null; error?:
 
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
-    const match = line.match(/^MOVE:\s*([`*~]*)([A-Za-z0-9+#=\-]+)([`*~]*)/i);
+    const match = line.match(/^MOVE:\s*([`*~]*)([A-Za-z0-9+#=-]+)([`*~]*)/i);
     if (match && match[2]) {
       moveCandidate = match[2].trim();
       break;
@@ -37,7 +38,7 @@ export function parseModelMove(rawOutput: string): { san: string | null; error?:
 
   // If no explicit line start, look anywhere in output for 'MOVE: <san>'
   if (!moveCandidate) {
-    const generalMatch = rawOutput.match(/MOVE:\s*([`*~]*)([A-Za-z0-9+#=\-]+)([`*~]*)/i);
+    const generalMatch = rawOutput.match(/MOVE:\s*([`*~]*)([A-Za-z0-9+#=-]+)([`*~]*)/i);
     if (generalMatch && generalMatch[2]) {
       moveCandidate = generalMatch[2].trim();
     }
@@ -94,6 +95,7 @@ export function checkGameEnd(game: Chess, plyCount: number, maxPly: number): Gam
       isOver: true,
       result: '1/2-1/2',
       reasonKey: 'resultStalemate',
+      drawReason: 'Stalemate',
     };
   }
 
@@ -102,6 +104,7 @@ export function checkGameEnd(game: Chess, plyCount: number, maxPly: number): Gam
       isOver: true,
       result: '1/2-1/2',
       reasonKey: 'resultThreefold',
+      drawReason: 'Threefold Repetition',
     };
   }
 
@@ -110,6 +113,7 @@ export function checkGameEnd(game: Chess, plyCount: number, maxPly: number): Gam
       isOver: true,
       result: '1/2-1/2',
       reasonKey: 'resultInsufficient',
+      drawReason: 'Insufficient Material',
     };
   }
 
@@ -118,6 +122,7 @@ export function checkGameEnd(game: Chess, plyCount: number, maxPly: number): Gam
       isOver: true,
       result: '1/2-1/2',
       reasonKey: 'resultFiftyMove',
+      drawReason: '50-Move Rule (Endless Loop Prevention)',
     };
   }
 
@@ -126,6 +131,7 @@ export function checkGameEnd(game: Chess, plyCount: number, maxPly: number): Gam
       isOver: true,
       result: '1/2-1/2',
       reasonKey: 'resultMoveLimit',
+      drawReason: 'Move Limit Reached',
     };
   }
 

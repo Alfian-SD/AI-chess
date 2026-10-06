@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Chess Arena</title>
+    <script>
+      // Single Page Application redirect for GitHub Pages
+      sessionStorage.redirect = location.href;
+      var repoBase = window.location.pathname.split('/')[1];
+      if (repoBase && !repoBase.includes('.')) {
+        window.location.replace('/' + repoBase + '/');
+      } else {
+        window.location.replace('/');
+      }
+    </script>
+  </head>
+  <body>
+    <p>Redirecting to <a href="./">AI Chess Arena</a>...</p>
+  </body>
+</html>
