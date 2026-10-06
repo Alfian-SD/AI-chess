@@ -1,6 +1,6 @@
-import React from 'react';
 import { MatchStatus, PlayerConfig, MatchSettings } from '../../lib/types';
 import { useTranslation } from '../../i18n/LanguageContext';
+import { getGameEndExplanation } from '../../lib/chess-engine';
 import { Play, Pause, RotateCcw, StepForward, Sliders, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 
 interface MatchControlProps {
@@ -10,6 +10,10 @@ interface MatchControlProps {
   blackConfig: PlayerConfig;
   openingName?: string;
   drawReason?: string;
+  result?: string;
+  terminationReason?: string;
+  endExplanation?: string;
+  isCheck?: boolean;
   errorMessage?: string;
   isConfigured: boolean;
   onStart: () => boolean | void;
@@ -29,6 +33,10 @@ export const MatchControl: React.FC<MatchControlProps> = ({
   blackConfig,
   openingName,
   drawReason,
+  result,
+  terminationReason,
+  endExplanation,
+  isCheck = false,
   errorMessage,
   isConfigured,
   onStart,
@@ -40,7 +48,7 @@ export const MatchControl: React.FC<MatchControlProps> = ({
   onSetMaxPly,
   onOpenSettings,
 }) => {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
 
   // Status Badge Styling
   let statusBadgeText = t.statusIdle;
@@ -115,6 +123,27 @@ export const MatchControl: React.FC<MatchControlProps> = ({
           {t.matchControl}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {isCheck && (
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                color: '#ffffff',
+                backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                border: '1px solid #ef4444',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                boxShadow: '0 0 8px rgba(239, 68, 68, 0.5)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              ⚠️ CHECK
+            </span>
+          )}
           {isMock && (
             <span
               style={{
@@ -507,23 +536,55 @@ export const MatchControl: React.FC<MatchControlProps> = ({
         </div>
       )}
 
-      {/* Draw Termination Reason */}
-      {status === 'finished' && drawReason && (
+      {/* Game End Result & Rule Explanation */}
+      {status === 'finished' && (
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid var(--border)',
+            flexDirection: 'column',
+            gap: '8px',
+            backgroundColor: 'rgba(125, 138, 94, 0.15)',
+            border: '1px solid var(--accent)',
             borderRadius: 'var(--radius-control)',
-            padding: '6px 10px',
-            fontSize: '11px',
-            color: 'var(--text-muted)',
+            padding: '12px 14px',
           }}
         >
-          <span style={{ fontWeight: 600, color: 'var(--text)' }}>Draw Reason:</span>
-          <span>{drawReason}</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)' }}>
+              {result === '1-0'
+                ? (locale === 'id' ? 'Kemenangan Putih' : 'White Victory')
+                : result === '0-1'
+                ? (locale === 'id' ? 'Kemenangan Hitam' : 'Black Victory')
+                : (locale === 'id' ? 'Pertandingan Remis' : 'Draw Match')}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                fontWeight: 700,
+                color: 'var(--accent-strong)',
+                backgroundColor: 'var(--surface-2)',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {result || '1/2-1/2'}
+            </span>
+          </div>
+
+          <div style={{ height: '1px', backgroundColor: 'var(--border)' }} />
+
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text)', lineHeight: 1.45 }}>
+            {endExplanation ||
+              getGameEndExplanation(
+                terminationReason,
+                result === '1-0' ? 'w' : result === '0-1' ? 'b' : undefined,
+                locale
+              ) ||
+              drawReason ||
+              'Game finished.'}
+          </p>
         </div>
       )}
 

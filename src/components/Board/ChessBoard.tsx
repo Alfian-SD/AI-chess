@@ -12,6 +12,8 @@ interface ChessBoardProps {
   lastMoveSquares?: string[]; // e.g. ['e2', 'e4']
   evaluation?: EvalResult;
   lastMoveAnnouncement?: string;
+  isCheck?: boolean;
+  checkKingSquare?: string | null;
 }
 
 export const ChessBoard: React.FC<ChessBoardProps> = ({
@@ -20,6 +22,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
   lastMoveSquares = [],
   evaluation,
   lastMoveAnnouncement,
+  isCheck = false,
+  checkKingSquare = null,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState<number>(440);
@@ -43,7 +47,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
-  // Custom square styles for last-move highlight
+  // Custom square styles for last-move highlight and king check highlight
   const customSquareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
     if (lastMoveSquares && lastMoveSquares.length >= 2) {
@@ -54,8 +58,19 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         };
       });
     }
+
+    // Red highlight on the king square when in check
+    if (isCheck && checkKingSquare) {
+      styles[checkKingSquare] = {
+        backgroundColor: 'rgba(239, 68, 68, 0.65)',
+        boxShadow: 'inset 0 0 12px 3px rgba(239, 68, 68, 0.95)',
+        borderRadius: '4px',
+        transition: 'background-color 150ms ease-out',
+      };
+    }
+
     return styles;
-  }, [lastMoveSquares]);
+  }, [lastMoveSquares, isCheck, checkKingSquare]);
 
   const customPieces = useMemo(() => getCustomPieces(), []);
 
@@ -111,6 +126,31 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
           backgroundColor: 'var(--surface)',
         }}
       >
+        {isCheck && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              backgroundColor: '#ef4444',
+              color: '#ffffff',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              boxShadow: '0 2px 10px rgba(239, 68, 68, 0.7)',
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              pointerEvents: 'none',
+            }}
+          >
+            <span style={{ fontSize: '10px' }}>⚠️</span> CHECK
+          </div>
+        )}
         <Chessboard
           options={{
             position: fen,

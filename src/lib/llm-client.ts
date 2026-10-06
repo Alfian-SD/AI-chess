@@ -1,4 +1,6 @@
+import { Chess } from 'chess.js';
 import { PlayerConfig } from './types';
+import { buildSystemPromptWithRules, buildTurnUserPrompt } from './position-analysis';
 
 export interface TestConnectionResult {
   success: boolean;
@@ -20,6 +22,8 @@ export interface StreamTurnParams {
   moveNumber?: number;
   isRepeatedPosition?: boolean;
   abortSignal?: AbortSignal;
+  game?: Chess;
+  previousPositions?: string[];
 }
 
 export interface StreamTurnResult {
@@ -240,38 +244,17 @@ export async function streamModelTurn(
   const tempInput = typeof player.temperature === 'number' && !isNaN(player.temperature) ? player.temperature : 0.7;
   const actualTemperature = Math.max(0, Math.min(1.2, tempInput));
 
-  // Construct prompts
-  const systemPrompt = `You are a Grandmaster chess engine playing as ${colorName}.
-[Session: Game ID ${gameId}, Ply ${moveNumber}]
-Analyze the position thoroughly: evaluate opponent threats, king safety, piece activity, candidate lines, and tactical ideas.
-You MUST provide your reasoning first.
-On your very final line, output ONLY your chosen move in Standard Algebraic Notation (SAN):
-MOVE: <san>
-
-Rules:
-1. You MUST select a move exclusively from this legal move list in Standard Algebraic Notation:
-${legalMoves.join(', ')}
-2. Your very last line MUST strictly follow the exact format "MOVE: <san>" with no trailing explanation.`;
-
-  let userPrompt = `[Metadata: Game ID ${gameId}, Turn ${moveNumber}]
-Current board FEN: ${fen}
-PGN history so far:
-${pgn || '(start of game)'}
-
-Your turn as ${colorName}. Legal moves:
-${legalMoves.join(', ')}`;
-
-  if (isRepeatedPosition) {
-    userPrompt += `\n\n[WARNING - POSITION REPEATED]: This exact board position has occurred twice already. To avoid a draw by repetition, play an active, non-repeating legal move.`;
-  }
-
-  if (previousError) {
-    userPrompt += `\n\n[CRITICAL RETRY ATTEMPT ${attemptNumber}]: Your previous output failed with error: "${previousError}".
-Choose a valid move strictly from this legal move list:
-${legalMoves.join(', ')}
-End your response with:
-MOVE: <san>`;
-  }
+  // Construct prompts with rules and live chess.js facts
+  const chessInstance = params.game || new Chess(fen);
+  const systemPrompt = buildSystemPromptWithRules(colorName as 'White' | 'Black', gameId);
+  const userPrompt = buildTurnUserPrompt({
+    game: chessInstance,
+    gameId,
+    pgnHistory: pgn,
+    previousPositions: params.previousPositions || [],
+    retryAttempt: attemptNumber,
+    retryErrorExplanation: previousError,
+  });
 
   const requestPayload: Record<string, unknown> = {
     model: player.model.trim(),

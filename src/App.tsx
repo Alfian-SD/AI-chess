@@ -12,6 +12,7 @@ import { ScoreboardModal } from './components/Scoreboard/ScoreboardModal';
 import { ReplayModal } from './components/Replay/ReplayModal';
 import { SettingsModal } from './components/Settings/SettingsModal';
 import { WelcomeModal } from './components/Welcome/WelcomeModal';
+import { RulesModal } from './components/Rules/RulesModal';
 import { PlayerState } from './lib/types';
 
 export function App() {
@@ -20,6 +21,8 @@ export function App() {
     displayedFen,
     displayedMove,
     lastMoveSquares,
+    isDisplayedInCheck,
+    checkKingSquare,
     liveReasoning,
     liveReasoningType,
     isThinking,
@@ -48,6 +51,7 @@ export function App() {
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
   const [isScoreboardOpen, setIsScoreboardOpen] = useState(false);
   const [isReplayOpen, setIsReplayOpen] = useState(false);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
 
   // Honest first-run experience: show welcome modal on first visit if not configured
   useEffect(() => {
@@ -111,6 +115,7 @@ export function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenScoreboard={() => setIsScoreboardOpen(true)}
         onOpenReplay={() => setIsReplayOpen(true)}
+        onOpenRules={() => setIsRulesOpen(true)}
       />
 
       {/* Main Arena Layout */}
@@ -135,13 +140,15 @@ export function App() {
               capturedPieces={topCaptured}
             />
 
-            {/* Chessboard with Eval Bar */}
+            {/* Chessboard with Eval Bar and Check Indicator */}
             <ChessBoard
               fen={displayedFen}
               orientation={boardOrientation}
               lastMoveSquares={lastMoveSquares}
               evaluation={currentEval}
               lastMoveAnnouncement={lastMoveAnnouncement}
+              isCheck={isDisplayedInCheck}
+              checkKingSquare={checkKingSquare}
             />
 
             {/* Bottom Player Card (White by default) */}
@@ -170,6 +177,10 @@ export function App() {
               blackConfig={match.black}
               openingName={match.openingName}
               drawReason={match.drawReason}
+              result={match.result}
+              terminationReason={match.terminationReason}
+              endExplanation={match.endExplanation}
+              isCheck={isDisplayedInCheck}
               errorMessage={match.errorMessage}
               isConfigured={isConfigured}
               onStart={startMatch}
@@ -231,6 +242,11 @@ export function App() {
       <ReplayModal
         isOpen={isReplayOpen}
         onClose={() => setIsReplayOpen(false)}
+      />
+
+      <RulesModal
+        isOpen={isRulesOpen}
+        onClose={() => setIsRulesOpen(false)}
       />
 
       {/* Responsive Layout Styles */}

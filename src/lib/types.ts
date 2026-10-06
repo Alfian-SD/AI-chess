@@ -68,6 +68,8 @@ export interface Match {
   result?: string; // "1-0" | "0-1" | "1/2-1/2" | "*"
   terminationReason?: string;
   drawReason?: string;
+  endExplanation?: string;
+  inCheck?: boolean;
   openingName?: string;
   white: PlayerConfig;
   black: PlayerConfig;

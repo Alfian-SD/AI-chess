@@ -15,9 +15,11 @@ import {
   parseModelMove,
   validateMove,
   checkGameEnd,
+  getRandomLegalMove,
   getCapturedPieces,
   exportPgnWithComments,
 } from '../lib/chess-engine';
+import { findKingSquare } from '../lib/position-analysis';
 import { getRandomOpening, OpeningLine } from '../lib/openings';
 import { saveMatch } from '../lib/storage';
 import { streamModelTurn } from '../lib/llm-client';
@@ -131,6 +133,8 @@ export function useChessGame() {
           result: endCheck.result,
           terminationReason: endCheck.reasonKey,
           drawReason: endCheck.drawReason,
+          endExplanation: endCheck.explanationEn,
+          inCheck: currentChess.inCheck(),
         };
         saveMatch(finished);
         return finished;
@@ -215,6 +219,8 @@ export function useChessGame() {
               gameId: currentMatch.gameId,
               moveNumber,
               isRepeatedPosition,
+              game: currentChess,
+              previousPositions: currentMatch.moves.map((m) => m.fenAfter),
             },
             (chunk) => {
               setLiveReasoning((prev) => prev + chunk);
@@ -264,19 +270,30 @@ export function useChessGame() {
       }
     }
 
-    // Never silently invent moves! Pause with clear error and Retry button
+    let isForfeitMove = false;
+
+    // After 3 failed attempts, play a random legal move and tag it FORFEIT MOVE
     if (!chosenSan || !chosenMoveObj) {
-      setIsThinking(false);
-      isExecutingRef.current = false;
-      if (matchStatusRef.current !== 'paused') {
-        setMatch((prev) => ({
-          ...prev,
-          status: 'error',
-          errorMessage:
-            'AI provider failed to generate a valid legal move after 3 attempts. Game paused. Click Retry to re-evaluate.',
-        }));
+      if (attemptsCollected.length >= 3) {
+        const forfeit = getRandomLegalMove(currentChess);
+        chosenSan = forfeit.san;
+        chosenMoveObj = forfeit.moveObj;
+        finalReasoning = `[FORFEIT MOVE]: ${activePlayer.displayName || activeColor} failed 3 consecutive attempts to provide a legal move. The arbiter played a random legal move (${chosenSan}).`;
+        finalReasoningType = 'explanation';
+        isForfeitMove = true;
+      } else {
+        setIsThinking(false);
+        isExecutingRef.current = false;
+        if (matchStatusRef.current !== 'paused') {
+          setMatch((prev) => ({
+            ...prev,
+            status: 'error',
+            errorMessage:
+              'AI provider failed to generate a valid legal move. Game paused. Click Retry to re-evaluate.',
+          }));
+        }
+        return;
       }
-      return;
     }
 
     // Apply move to chess instance
@@ -296,7 +313,7 @@ export function useChessGame() {
       reasoningType: finalReasoningType,
       attempts: attemptsCollected,
       latencyMs: totalLatencyMs,
-      forfeitRandom: false,
+      forfeitRandom: isForfeitMove,
       evalCp: currentEval.cp,
       evalMate: currentEval.mate,
       source: isBookMove ? 'LIVE' : responseSource,
@@ -321,6 +338,8 @@ export function useChessGame() {
         result: afterEndCheck.result,
         terminationReason: afterEndCheck.reasonKey,
         drawReason: afterEndCheck.drawReason,
+        endExplanation: afterEndCheck.explanationEn,
+        inCheck: currentChess.inCheck(),
         currentFen: fenAfter,
         activeColor: currentChess.turn() as PlayerColor,
         moves: nextMoves,
@@ -513,6 +532,15 @@ export function useChessGame() {
     return getCapturedPieces(new Chess(displayedFen));
   }, [displayedFen]);
 
+  const isDisplayedInCheck = useMemo(() => {
+    return new Chess(displayedFen).inCheck();
+  }, [displayedFen]);
+
+  const checkKingSquare = useMemo(() => {
+    const c = new Chess(displayedFen);
+    return c.inCheck() ? findKingSquare(c, c.turn() as 'w' | 'b') : null;
+  }, [displayedFen]);
+
   const getPgnString = useCallback(() => {
     return exportPgnWithComments(match);
   }, [match]);
@@ -522,6 +550,8 @@ export function useChessGame() {
     displayedFen,
     displayedMove,
     lastMoveSquares,
+    isDisplayedInCheck,
+    checkKingSquare,
     liveReasoning,
     liveReasoningType,
     isThinking,

@@ -1,12 +1,13 @@
 import React from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
-import { BarChart3, Trophy, Sliders, Sparkles } from 'lucide-react';
+import { BarChart3, Trophy, Sliders, Sparkles, BookOpen } from 'lucide-react';
 
 interface HeaderProps {
   mockEnabled?: boolean;
   onOpenSettings: () => void;
   onOpenScoreboard: () => void;
   onOpenReplay: () => void;
+  onOpenRules: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -14,6 +15,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenScoreboard,
   onOpenReplay,
+  onOpenRules,
 }) => {
   const { locale, setLocale, t } = useTranslation();
 
@@ -113,6 +115,37 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Sliders size={13} color="var(--accent-strong)" />
           <span>Settings</span>
+        </button>
+
+        {/* Rules Button */}
+        <button
+          onClick={onOpenRules}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 10px',
+            backgroundColor: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-control)',
+            color: 'var(--text-muted)',
+            fontSize: '11px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'color 150ms ease, border-color 150ms ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--text)';
+            e.currentTarget.style.borderColor = 'var(--accent)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'var(--text-muted)';
+            e.currentTarget.style.borderColor = 'var(--border)';
+          }}
+          title={locale === 'id' ? 'Lihat panduan aturan catur' : 'View chess rules guide'}
+        >
+          <BookOpen size={13} />
+          <span>{t.rules || 'Rules'}</span>
         </button>
 
         {/* Scoreboard Button */}
